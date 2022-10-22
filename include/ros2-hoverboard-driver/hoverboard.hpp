@@ -1,5 +1,6 @@
 #include "rclcpp/rclcpp.hpp"
 #include "wheel_msgs/msg/wheel_speeds.hpp"
+#include "geometry_msgs/msg/twist.hpp"
 #include "std_msgs/msg/float64.hpp"
 #include "std_msgs/msg/string.hpp"
 
@@ -20,11 +21,11 @@ public:
     Hoverboard(); //Constructor
     ~Hoverboard(); //Destructor
     
-    void read(); // Function to read data coming from BLDC controller
+    int32_t read(); // Function to read data coming from BLDC controller
     void write(); // Function to send comand references to the BLDC controller
  
  private:
-    void protocol_recv (uint8_t c); // Function to recontruct serial packets coming from BLDC controller
+    int32_t protocol_recv (uint8_t c); // Function to recontruct serial packets coming from BLDC controller
 
     // ROS2 Publishers
     rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr vel_pub_[2];
@@ -37,6 +38,16 @@ public:
     rclcpp::Subscription<wheel_msgs::msg::WheelSpeeds>::SharedPtr speeds_sub_;
     // Callback for subscriber
     void setpoint_callback(wheel_msgs::msg::WheelSpeeds::UniquePtr msg); // Be careful with UniquePtr, in speeds_sub_ definition we remove it... TODO :  understand what UniquePtr is doing!
+
+    // Twist subscriber
+    rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+    void twist_callback(geometry_msgs::msg::Twist::UniquePtr);
+    //const
+    //{
+    //    RCLCPP_INFO(this->get_logger(), "I heard Twist");
+    //}; 
+
+
 
     // Hoverboard protocol variables
     int port_fd;

@@ -1,5 +1,6 @@
 #include "ros2-hoverboard-driver/hoverboard.hpp"
 
+#define MY_DEBUG
 
 Hoverboard::Hoverboard() 
 : Node("hoverboard_driver_node") // Member initialization for ROS2 node
@@ -20,7 +21,10 @@ Hoverboard::Hoverboard()
     // Create the subscriber to receive speed setpoints
     speeds_sub_   = this->create_subscription<wheel_msgs::msg::WheelSpeeds>("wheel_vel_setpoints",
                     10, std::bind(&Hoverboard::setpoint_callback, this, std::placeholders::_1));
-    
+
+    cmd_vel_pub_  = this->create_subscription<geometry_msgs::msg::Twist>("cmd_vel", 
+                    10, std::bind(&Hoverboard::twist_callback, this, std::placeholders::_1));
+
     // Convert m/s to rad/s
     // TODO : take into account the way we send references to the hoverboard controller
     //max_velocity /= wheel_radius;
@@ -53,39 +57,63 @@ void Hoverboard::setpoint_callback(wheel_msgs::msg::WheelSpeeds::UniquePtr msg)
     setpoint[0] = msg->right_wheel;
     setpoint[1] = msg->left_wheel;
 
-    RCLCPP_INFO(this->get_logger(), "I heard something: %f, %f", setpoint[0], setpoint[1]);
+    RCLCPP_INFO(this->get_logger(), "I heard wheelSpeeds: %f, %f", setpoint[0], setpoint[1]);
 }
 
-void Hoverboard::read() {
+void Hoverboard::twist_callback(geometry_msgs::msg::Twist::UniquePtr msg)
+{
+   // setpoint[0] = msg->right_wheel;
+   // setpoint[1] = msg->left_wheel;
+
+    RCLCPP_INFO(this->get_logger(), "I heard twist: %f, %f", setpoint[0], setpoint[1]);
+}
+
+int32_t Hoverboard::read() {
+    int32_t status = 0;
+
     if (port_fd != -1) {
         uint8_t c;
         int i = 0, r = 0;
+#ifdef MY_DEBUG1
+            rclcpp::Time last_read;
+#endif
+#ifdef MY_DEBUG2
+           RCLCPP_INFO(this->get_logger(), "Start reading UART");
+#endif           
 
         while ((r = ::read(port_fd, &c, 1)) > 0 && i++ < 1024){
-            //RCLCPP_INFO(this->get_logger(), "Reading UART");
-            protocol_recv(c);
+#ifdef MY_DEBUG2
+           RCLCPP_INFO(this->get_logger(), "Reading UART");
+#endif           
+            status = protocol_recv(c);
         }            
 
-        // if (i > 0)
-        // last_read = ros::Time::now();
-
+#ifdef MY_DEBUG1
+        if (i > 0)
+            last_read = rclcpp::Clock().now();
+#endif
         if (r < 0 && errno != EAGAIN)
             RCLCPP_ERROR(this->get_logger(), "Reading from serial %s failed: %d", PORT, r);
     }
-
-    // if ((ros::Time::now() - last_read).toSec() > 1) {
-    //     RCLCPP_ERROR(this->get_logger(), "Timeout reading from serial %s failed", PORT);
-    // }
+#ifdef MY_DEBUG1
+    if ((rclcpp::Clock().now() - last_read).toSec() > 1) {
+        RCLCPP_ERROR(this->get_logger(), "Timeout reading from serial %s failed", PORT);
+     }
+#endif   
+    return status;
 }
 
-void Hoverboard::protocol_recv (uint8_t byte) {
-    start_frame = ((uint16_t)(byte) << 8) | prev_byte;
-    //RCLCPP_INFO(this->get_logger(), "Received a byte: %x",(uint8_t)byte);
-    // if ((uint8_t)byte == 0xAB && (uint8_t)prev_byte == 0xCD){
-    //     RCLCPP_INFO(this->get_logger(), "Received Start frame: %x", start_frame);
-    //     RCLCPP_INFO(this->get_logger(), "Received Start frame: %x %x", (byte) << 8, (uint8_t)prev_byte);
-    // }
+int32_t Hoverboard::protocol_recv (uint8_t byte) {
+    int32_t   status = 0;
 
+    start_frame = ((uint16_t)(byte) << 8) | prev_byte;
+#ifdef MY_DEBUG1    
+    RCLCPP_INFO(this->get_logger(), "Received a byte: %x",(uint8_t)byte);
+     if ((uint8_t)byte == 0xAB && (uint8_t)prev_byte == 0xCD){
+         RCLCPP_INFO(this->get_logger(), "Received Start frame: %x", start_frame);
+         RCLCPP_INFO(this->get_logger(), "Received Start frame: %x %x", (byte) << 8, (uint8_t)prev_byte);
+     }
+#endif
     // Read the start frame
     if (start_frame == START_FRAME) {
         //RCLCPP_INFO(this->get_logger(), "Start frame recognised");
@@ -106,6 +134,8 @@ void Hoverboard::protocol_recv (uint8_t byte) {
             msg.cmd2 ^
             msg.speedR_meas ^
             msg.speedL_meas ^
+            msg.wheelR_cnt ^
+            msg.wheelL_cnt ^
             msg.batVoltage ^
             msg.boardTemp ^
             msg.cmdLed);
@@ -128,12 +158,16 @@ void Hoverboard::protocol_recv (uint8_t byte) {
             cmd_pub_[0]->publish(f);
             f.data = (double)msg.cmd2;
             cmd_pub_[1]->publish(f);
+
+            status = 1;
         } else {
             RCLCPP_INFO(this->get_logger(), "Hoverboard checksum mismatch: %d vs %d", msg.checksum, checksum);
         }
         msg_len = 0;
     }
     prev_byte = byte;
+
+    return status;
 }
 
 void Hoverboard::write() {
@@ -141,7 +175,7 @@ void Hoverboard::write() {
         RCLCPP_ERROR(this->get_logger(), "Attempt to write on closed serial");
         return;
     }
-    // Calculate steering from difference of left and right //TODO : change this shiiit
+    // Calculate steering from difference of left and right //TODO : change thi
     const double speed = (setpoint[0] + setpoint[1])/2.0;
     const double steer = (setpoint[0] - setpoint[1])*2.0;
 
@@ -152,8 +186,14 @@ void Hoverboard::write() {
     command.checksum = (uint16_t)(command.start ^ command.steer ^ command.speed);
 
     int rc = ::write(port_fd, (const void*)&command, sizeof(command));
-    if (rc < 0) {
-        RCLCPP_ERROR(this->get_logger(), "Error writing to hoverboard serial port");
-    }
+    // if (rc < 0) {
+    //     RCLCPP_ERROR(this->get_logger(), "Error writing to hoverboard serial port errno=%d, %s", 
+    //                   errno, strerror(errno));
+    // } else if (rc == sizeof(command)) {
+    //     RCLCPP_ERROR(this->get_logger(), "1");
+    // } else {
+    //     RCLCPP_ERROR(this->get_logger(), "0.");
+    // }
+    
 }
 

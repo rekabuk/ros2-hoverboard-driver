@@ -9,8 +9,10 @@ int main(int argc, char * argv[])
 
   while (rclcpp::ok())
   {
-    hoverboard_node->read();
-    //hoverboard_node->write();
+    if (hoverboard_node->read()==1)
+    {
+      hoverboard_node->write();
+    }
     rclcpp::spin_some(hoverboard_node);
   }  
   rclcpp::shutdown();

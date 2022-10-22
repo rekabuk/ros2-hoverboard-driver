@@ -22,6 +22,7 @@ find_package(ament_cmake REQUIRED)
 # find_package(<dependency> REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 # Add custom msgs
 find_package(wheel_msgs REQUIRED)
 
@@ -32,7 +33,7 @@ include_directories(include)
 add_library(hoverboard SHARED
             src/hoverboard.cpp)
 # Add other dependencies needed by the source code declared above
-ament_target_dependencies(hoverboard rclcpp std_msgs wheel_msgs)
+ament_target_dependencies(hoverboard rclcpp std_msgs wheel_msgs geometry_msgs)
 
 # Add the code we want to compile to have an executable (so ros2 run can execute it)
 add_executable(main src/main.cpp)
