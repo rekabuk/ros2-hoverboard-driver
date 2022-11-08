@@ -5,7 +5,28 @@
 Hoverboard::Hoverboard() 
 : Node("hoverboard_driver_node") // Member initialization for ROS2 node
 {
-    // Constructor implementation
+    // // Constructor implementation
+    // hardware_interface::JointStateHandle left_wheel_state_handle("left_wheel",
+	// 							 &joints[0].pos.data,
+	// 							 &joints[0].vel.data,
+	// 							 &joints[0].eff.data);
+    // hardware_interface::JointStateHandle right_wheel_state_handle("right_wheel",
+	// 							  &joints[1].pos.data,
+	// 							  &joints[1].vel.data,
+	// 							  &joints[1].eff.data);
+    // joint_state_interface.registerHandle (left_wheel_state_handle);
+    // joint_state_interface.registerHandle (right_wheel_state_handle);
+    // registerInterface(&joint_state_interface);
+
+    // hardware_interface::JointHandle left_wheel_vel_handle(
+    //     joint_state_interface.getHandle("left_wheel"),
+    //     &joints[0].cmd.data);
+    // hardware_interface::JointHandle right_wheel_vel_handle(
+    //     joint_state_interface.getHandle("right_wheel"),
+    //     &joints[1].cmd.data);
+    // velocity_joint_interface.registerHandle (left_wheel_vel_handle);
+    // velocity_joint_interface.registerHandle (right_wheel_vel_handle);
+    // registerInterface(&velocity_joint_interface);
 
     // These publishers are only for debugging purposes
     // TODO : understand this. I think that using this-> for creating subscribers and publishers, makes that those
